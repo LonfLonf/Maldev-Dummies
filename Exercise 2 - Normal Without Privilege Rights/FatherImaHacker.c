@@ -5,6 +5,7 @@
 int main(void)
 {
     PROCESSENTRY32 entry;
+    entry.dwSize = sizeof(PROCESSENTRY32);
     DWORD pid;
 
     HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
