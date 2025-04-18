@@ -56,7 +56,6 @@ int main(void)
     }
 
     HANDLE hExplorer = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
-
     if (hExplorer == NULL)
     {
         printf("[-] Error to Open Process: Explorer.exe %lu\n", GetLastError());
